@@ -4,43 +4,6 @@ import numpy as np
 import yfinance as yf
 import plotly.graph_objects as go
 
-import requests
-import os
-
-API_KEY = os.getenv("ALPHA_VANTAGE_KEY")  # Store your key securely
-
-def search_ticker(query):
-    url = "https://www.alphavantage.co/query"
-    params = {
-        "function": "SYMBOL_SEARCH",
-        "keywords": query,
-        "apikey": API_KEY
-    }
-    response = requests.get(url, params=params)
-
-    try:
-        data = response.json()
-    except requests.exceptions.JSONDecodeError:
-        print("⚠️ API did not return JSON. Response text:")
-        print(response.text)
-        return []
-
-    if "bestMatches" in data:
-        return [
-            {
-                "symbol": match.get("1. symbol"),
-                "name": match.get("2. name")
-            }
-            for match in data["bestMatches"]
-        ]
-    else:
-        return []
-
-# Example usage
-print(search_ticker("Tesla"))
-
-
-
 def calculate_rsi(data, window=14):
     if data.empty or 'Close' not in data:
         return pd.Series(dtype=float)
