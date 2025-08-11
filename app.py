@@ -39,20 +39,31 @@ interval = st.selectbox("Select Interval", ["1d", "1wk", "1mo"], index=0)
 if stock:
     df = yf.download(stock, period=period, interval=interval)
     if not df.empty:
-        df['MA20'] = df['Close'].rolling(window=20).mean()
-        df['MA50'] = df['Close'].rolling(window=50).mean()
-        df['Volatility'] = df['Close'].rolling(window=20).std()
-        df['RSI'] = calculate_rsi(df)
+        df.dropna(inplace=True)
+        if not df.empty:
+            df['MA20'] = df['Close'].rolling(window=20).mean()
+            df['MA50'] = df['Close'].rolling(window=50).mean()
+            df['Volatility'] = df['Close'].rolling(window=20).std()
+            df['RSI'] = calculate_rsi(df)
 
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            st.plotly_chart(plot_candlestick(df, stock), use_container_width=True)
-        with col2:
-            st.metric(label="Latest Close", value=f"${df['Close'].iloc[-1]:.2f}")
-            st.metric(label="Volatility (20-day)", value=f"{df['Volatility'].iloc[-1]:.2f}")
-            st.metric(label="RSI (14-day)", value=f"{df['RSI'].iloc[-1]:.2f}")
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                st.plotly_chart(plot_candlestick(df, stock), use_container_width=True)
+            with col2:
+                latest_close = df['Close'].iloc[-1] if not df['Close'].empty else None
+                latest_volatility = df['Volatility'].iloc[-1] if not df['Volatility'].empty else None
+                latest_rsi = df['RSI'].iloc[-1] if not df['RSI'].empty else None
 
-        st.subheader("Recent Data Table")
-        st.dataframe(df.tail(20))
+                if latest_close is not None:
+                    st.metric(label="Latest Close", value=f"${latest_close:.2f}")
+                if latest_volatility is not None:
+                    st.metric(label="Volatility (20-day)", value=f"{latest_volatility:.2f}")
+                if latest_rsi is not None:
+                    st.metric(label="RSI (14-day)", value=f"{latest_rsi:.2f}")
+
+            st.subheader("Recent Data Table")
+            st.dataframe(df.tail(20))
+        else:
+            st.error("Not enough data to compute metrics.")
     else:
         st.error("No data found. Please check the stock symbol.")
