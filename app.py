@@ -35,16 +35,19 @@ def plot_candlestick(df, stock):
 st.set_page_config(page_title="Real-Time Stock Dashboard", layout="wide")
 st.title("📈 Real-Time Stock Price Dashboard")
 
-stock = st.text_input("Enter Stock Symbol", "AAPL")
-period = st.selectbox("Select Period", ["1mo", "3mo", "6mo", "1y"], index=2)
-interval = st.selectbox("Select Interval", ["1d", "1wk", "1mo"], index=0)
+# Sidebar for user inputs
+st.sidebar.header("User  Input")
+stock = st.sidebar.text_input("Enter Stock Symbol", "AAPL")
+period = st.sidebar.selectbox("Select Period", ["1mo", "3mo", "6mo", "1y"], index=2)
+interval = st.sidebar.selectbox("Select Interval", ["1d", "1wk", "1mo"], index=0)
 
-if stock:
-    try:
-        df = yf.download(stock, period=period, interval=interval, progress=False)
-    except Exception as e:
-        st.error(f"Error fetching data: {e}")
-        df = pd.DataFrame()
+if st.sidebar.button("Fetch Data"):
+    with st.spinner("Fetching data..."):
+        try:
+            df = yf.download(stock, period=period, interval=interval, progress=False)
+        except Exception as e:
+            st.error(f"Error fetching data: {e}")
+            df = pd.DataFrame()
     
     if not df.empty:
         df.dropna(inplace=True)
@@ -58,22 +61,13 @@ if stock:
             with col1:
                 st.plotly_chart(plot_candlestick(df, stock), use_container_width=True)
             with col2:
-                try:
-                    latest_close = float(df['Close'].iloc[-1]) if pd.notna(df['Close'].iloc[-1]) else None
-                except Exception:
-                    latest_close = None
+                latest_close = df['Close'].iloc[-1] if not df['Close'].isna().all() else None
                 st.metric(label="Latest Close", value=f"${latest_close:.2f}" if latest_close is not None else "N/A")
 
-                try:
-                    latest_volatility = float(df['Volatility'].iloc[-1]) if pd.notna(df['Volatility'].iloc[-1]) else None
-                except Exception:
-                    latest_volatility = None
+                latest_volatility = df['Volatility'].iloc[-1] if not df['Volatility'].isna().all() else None
                 st.metric(label="Volatility (20-day)", value=f"{latest_volatility:.2f}" if latest_volatility is not None else "N/A")
 
-                try:
-                    latest_rsi = float(df['RSI'].iloc[-1]) if pd.notna(df['RSI'].iloc[-1]) else None
-                except Exception:
-                    latest_rsi = None
+                latest_rsi = df['RSI'].iloc[-1] if not df['RSI'].isna().all() else None
                 st.metric(label="RSI (14-day)", value=f"{latest_rsi:.2f}" if latest_rsi is not None else "N/A")
 
             st.subheader("Recent Data Table")
@@ -82,3 +76,4 @@ if stock:
             st.error("Not enough data to compute metrics. Try a longer period.")
     else:
         st.error("No data found. Please check the stock symbol.")
+
