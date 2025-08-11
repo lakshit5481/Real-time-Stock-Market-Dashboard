@@ -7,16 +7,16 @@ import plotly.graph_objects as go
 # Function to calculate RSI
 def calculate_rsi(data, window=14):
     delta = data['Close'].diff()
-    gain = np.where(delta > 0, delta, 0)
-    loss = np.where(delta < 0, -delta, 0)
-    avg_gain = pd.Series(gain).rolling(window=window).mean()
-    avg_loss = pd.Series(loss).rolling(window=window).mean()
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
+    avg_gain = gain.rolling(window=window).mean()
+    avg_loss = loss.rolling(window=window).mean()
     rs = avg_gain / avg_loss
     rsi = 100 - (100 / (1 + rs))
     return rsi
 
 # Function to plot candlestick chart
-def plot_candlestick(df):
+def plot_candlestick(df, stock):
     fig = go.Figure(data=[go.Candlestick(x=df.index,
                                          open=df['Open'],
                                          high=df['High'],
@@ -46,7 +46,7 @@ if stock:
 
         col1, col2 = st.columns([3, 1])
         with col1:
-            st.plotly_chart(plot_candlestick(df), use_container_width=True)
+            st.plotly_chart(plot_candlestick(df, stock), use_container_width=True)
         with col2:
             st.metric(label="Latest Close", value=f"${df['Close'].iloc[-1]:.2f}")
             st.metric(label="Volatility (20-day)", value=f"{df['Volatility'].iloc[-1]:.2f}")
