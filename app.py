@@ -4,6 +4,18 @@ import numpy as np
 import yfinance as yf
 import plotly.graph_objects as go
 
+import requests
+
+def search_ticker(query):
+    url = f"https://query1.finance.yahoo.com/v1/finance/search?q={query}"
+    response = requests.get(url)
+    data = response.json()
+    results = [(item["symbol"], item.get("shortname", "")) for item in data.get("quotes", [])]
+    return results
+
+print(search_ticker("Tesla"))
+
+
 def calculate_rsi(data, window=14):
     if data.empty or 'Close' not in data:
         return pd.Series(dtype=float)
