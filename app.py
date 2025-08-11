@@ -58,14 +58,23 @@ if stock:
             with col1:
                 st.plotly_chart(plot_candlestick(df, stock), use_container_width=True)
             with col2:
-                latest_close = df['Close'].iloc[-1] if not df['Close'].isna().iloc[-1] else None
-                st.metric(label="Latest Close", value=f"${latest_close:.2f}" if latest_close else "N/A")
+                try:
+                    latest_close = float(df['Close'].iloc[-1]) if pd.notna(df['Close'].iloc[-1]) else None
+                except Exception:
+                    latest_close = None
+                st.metric(label="Latest Close", value=f"${latest_close:.2f}" if latest_close is not None else "N/A")
 
-                latest_volatility = df['Volatility'].iloc[-1] if not df['Volatility'].isna().iloc[-1] else None
-                st.metric(label="Volatility (20-day)", value=f"{latest_volatility:.2f}" if latest_volatility else "N/A")
+                try:
+                    latest_volatility = float(df['Volatility'].iloc[-1]) if pd.notna(df['Volatility'].iloc[-1]) else None
+                except Exception:
+                    latest_volatility = None
+                st.metric(label="Volatility (20-day)", value=f"{latest_volatility:.2f}" if latest_volatility is not None else "N/A")
 
-                latest_rsi = df['RSI'].iloc[-1] if not df['RSI'].isna().iloc[-1] else None
-                st.metric(label="RSI (14-day)", value=f"{latest_rsi:.2f}" if latest_rsi else "N/A")
+                try:
+                    latest_rsi = float(df['RSI'].iloc[-1]) if pd.notna(df['RSI'].iloc[-1]) else None
+                except Exception:
+                    latest_rsi = None
+                st.metric(label="RSI (14-day)", value=f"{latest_rsi:.2f}" if latest_rsi is not None else "N/A")
 
             st.subheader("Recent Data Table")
             st.dataframe(df.tail(20))
