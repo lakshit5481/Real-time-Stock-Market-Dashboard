@@ -12,7 +12,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# --------- POPULAR COMPANIES ----------
+# --------- POPULAR COMPANIES FOR QUICK SELECT ----------
 POPULAR_COMPANIES = {
     "Apple Inc": "AAPL",
     "Microsoft Corporation": "MSFT",
@@ -29,7 +29,7 @@ POPULAR_COMPANIES = {
 def get_http_session():
     s = requests.Session()
     s.headers.update({"User-Agent": "Mozilla/5.0"})
-    return s  # pooled connections
+    return s
 
 # --------- YAHOO FINANCE SEARCH WITH RETRIES ----------
 @st.cache_data(show_spinner=False, ttl=3600, max_entries=512)
@@ -56,58 +56,44 @@ def search_ticker(company_name: str, max_retries=3):
             backoff = min(backoff * 2, 4)
     return None
 
-# --------- FETCH STOCK DATA WITH ROBUST FALLBACKS ----------
+# --------- FETCH STOCK DATA ----------
 @st.cache_data(show_spinner=False, ttl=120, max_entries=256)
 def get_stock_data(symbol: str, period="1mo"):
-    """
-    Fetch historical stock data with robust interval fallbacks.
-    - 5d: try 15m, then 30m, 60m, 1h
-    - 1y: try 1wk, then 1d
-    - 5y: try 1mo, then 1wk
-    - max: try 3mo, then 1mo
-    Others default to 1d.
-    """
+    """Fetch historical stock data with interval mapping."""
     try:
-        interval_candidates_by_period = {
-            "5d": ["15m", "30m", "60m", "1h"],
-            "1mo": ["1d"],
-            "3mo": ["1d"],
-            "6mo": ["1d"],
-            "1y": ["1wk", "1d"],
-            "5y": ["1mo", "1wk"],
-            "max": ["3mo", "1mo"],
+        INTERVAL_MAP = {
+            "5d": "30m",
+            "1mo": "1d",
+            "3mo": "1d",
+            "6mo": "1d",
+            "1y": "1wk",
+            "5y": "1mo",
+            "max": "3mo"
         }
-        intervals = interval_candidates_by_period.get(period, ["1d"])
-
-        last_interval = None
-        for interval in intervals:
-            last_interval = interval
-            df = yf.download(
-                symbol,
-                period=period,
-                interval=interval,
-                auto_adjust=True,
-                progress=False,
-                threads=True,
-            )
-            df = df.dropna()
-            if df.empty:
-                continue
-
-            # Normalize datetime index for Altair/Streamlit plotting
-            if not isinstance(df.index, pd.DatetimeIndex):
-                df.index = pd.to_datetime(df.index, utc=True, errors="coerce")
-            if isinstance(df.index, pd.DatetimeIndex) and df.index.tz is not None:
-                df.index = df.index.tz_convert("UTC").tz_localize(None)
-
-            df = df.reset_index().rename(columns={df.columns: "Date"})
-            return df, interval
-
-        return pd.DataFrame(), last_interval
+        interval = INTERVAL_MAP.get(period, "1d")
+        df = yf.download(
+            symbol,
+            period=period,
+            interval=interval,
+            auto_adjust=True,
+            progress=False,
+            threads=True,
+        )
+        df = df.dropna()
+        if df.empty:
+            return pd.DataFrame(), interval
+        # Normalize datetime for Altair/Streamlit
+        if not isinstance(df.index, pd.DatetimeIndex):
+            df.index = pd.to_datetime(df.index, utc=True, errors="coerce")
+        # Altair expects naive or consistent timezone; drop tzinfo
+        if isinstance(df.index, pd.DatetimeIndex) and df.index.tz is not None:
+            df.index = df.index.tz_convert("UTC").tz_localize(None)
+        df = df.reset_index().rename(columns={df.columns[0]: "Date"})
+        return df, interval
     except Exception:
         return pd.DataFrame(), None
 
-# --------- UI ----------
+# --------- UI COMPONENTS ----------
 st.title("📊 Real-Time Stock Market Dashboard")
 st.markdown("Track live **stock prices, volume, and trends** for any company.")
 
@@ -132,7 +118,7 @@ with st.sidebar:
         ["5d", "1mo", "3mo", "6mo", "1y", "5y", "max"],
         index=1
     )
-    st.caption("Data cached ~120s for responsiveness. 5d uses 15m with fallbacks; 1y uses 1wk→1d.")
+    st.caption("Data cached for ~2 minutes to balance freshness and performance.")
 
 if company_name:
     with st.spinner("Searching ticker symbol..."):
@@ -144,16 +130,14 @@ if company_name:
     if ticker:
         st.subheader(f"📌 {company_name} ({ticker}) — Period: {time_period}")
 
-        # IMPORTANT: ensure full function name is called; avoid NameError
         with st.spinner("Downloading stock data..."):
             df, interval_used = get_stock_data(ticker, period=time_period)
 
         if not df.empty:
-            st.caption(f"✅ Data fetched (interval = {interval_used})")
+            st.caption(f"✅ Data fetched successfully (interval = {interval_used})")
 
-            base = alt.Chart(df).encode(
-                x=alt.X("Date:T", title="Date")  # explicit temporal encoding
-            )
+            # Base chart with explicit temporal encoding
+            base = alt.Chart(df).encode(x=alt.X("Date:T", title="Date"))
 
             close_chart = (
                 base.mark_line(color="#1f77b4")
@@ -182,12 +166,14 @@ if company_name:
             st.divider()
             st.write("📅 **Latest Stock Data**")
             st.dataframe(df.tail(), use_container_width=True)
+
         else:
             st.error(
                 f"No stock data available for {ticker} "
-                f"(Period: {time_period}, Interval tried: {interval_used}). "
-                "Try a longer period or check if the market is closed."
+                f"(Period: {time_period}, Interval: {interval_used}). "
+                f"Try a longer period or different symbol."
             )
+            st.caption("If markets are closed or an intraday interval has no candles, some windows can return empty data.")
     else:
         st.error(
             "❌ No ticker found for the entered company name.\n\n"
