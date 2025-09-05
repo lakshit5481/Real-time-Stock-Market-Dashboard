@@ -44,7 +44,6 @@ def search_ticker(company_name: str, max_retries=3):
             if resp.status_code == 200:
                 data = resp.json()
                 if data.get("quotes"):
-                    # return first symbol with a value
                     for q in data["quotes"]:
                         sym = q.get("symbol")
                         if sym:
@@ -57,28 +56,31 @@ def search_ticker(company_name: str, max_retries=3):
             backoff = min(backoff * 2, 4)
     return None
 
-# --------- FETCH STOCK DATA WITH INTRADAY FALLBACKS ----------
+# --------- FETCH STOCK DATA WITH ROBUST FALLBACKS ----------
 @st.cache_data(show_spinner=False, ttl=120, max_entries=256)
 def get_stock_data(symbol: str, period="1mo"):
     """
-    Fetch historical stock data with interval mapping and intraday fallbacks.
-    5d uses 15m first, then 30m, 60m, 1h if needed.
+    Fetch historical stock data with robust interval fallbacks.
+    - 5d: try 15m, then 30m, 60m, 1h
+    - 1y: try 1wk, then 1d
+    - 5y: try 1mo, then 1wk
+    - max: try 3mo, then 1mo
+    Others: use 1d
     """
     try:
-        # Interval candidates by period
         interval_candidates_by_period = {
-            "5d": ["15m", "30m", "60m", "1h"],  # more reliable than 30m-only
+            "5d": ["15m", "30m", "60m", "1h"],
             "1mo": ["1d"],
             "3mo": ["1d"],
             "6mo": ["1d"],
-            "1y": ["1wk"],
-            "5y": ["1mo"],
-            "max": ["3mo"]
+            "1y": ["1wk", "1d"],
+            "5y": ["1mo", "1wk"],
+            "max": ["3mo", "1mo"],
         }
-        interval_candidates = interval_candidates_by_period.get(period, ["1d"])
+        intervals = interval_candidates_by_period.get(period, ["1d"])
 
         last_interval = None
-        for interval in interval_candidates:
+        for interval in intervals:
             last_interval = interval
             df = yf.download(
                 symbol,
@@ -95,7 +97,6 @@ def get_stock_data(symbol: str, period="1mo"):
             # Normalize datetime index for Altair/Streamlit plotting
             if not isinstance(df.index, pd.DatetimeIndex):
                 df.index = pd.to_datetime(df.index, utc=True, errors="coerce")
-            # Drop timezone for browser-local rendering; keep absolute times consistent
             if isinstance(df.index, pd.DatetimeIndex) and df.index.tz is not None:
                 df.index = df.index.tz_convert("UTC").tz_localize(None)
 
@@ -131,7 +132,7 @@ with st.sidebar:
         ["5d", "1mo", "3mo", "6mo", "1y", "5y", "max"],
         index=1
     )
-    st.caption("Data cached ~120s for responsiveness. Intraday for 5d uses 15m with fallbacks.")
+    st.caption("Data cached ~120s for responsiveness. Intraday 5d uses 15m with fallbacks.")
 
 if company_name:
     with st.spinner("Searching ticker symbol..."):
@@ -144,56 +145,4 @@ if company_name:
         st.subheader(f"📌 {company_name} ({ticker}) — Period: {time_period}")
 
         with st.spinner("Downloading stock data..."):
-            df, interval_used = get_stock_data(ticker, period=time_period)
-
-        if not df.empty:
-            st.caption(f"✅ Data fetched (interval = {interval_used})")
-
-            base = alt.Chart(df).encode(
-                x=alt.X("Date:T", title="Date")  # explicit temporal encoding
-            )
-
-            close_chart = (
-                base.mark_line(color="#1f77b4")
-                .encode(
-                    y=alt.Y("Close:Q", title="Closing Price ($)"),
-                    tooltip=[alt.Tooltip("Date:T"), alt.Tooltip("Close:Q", format=".2f")]
-                )
-                .properties(title="Closing Price Over Time", height=300)
-                .interactive()
-            )
-
-            volume_chart = (
-                base.mark_bar(color="#ff7f0e")
-                .encode(
-                    y=alt.Y("Volume:Q", title="Volume"),
-                    tooltip=[alt.Tooltip("Date:T"), alt.Tooltip("Volume:Q", format=",.0f")]
-                )
-                .properties(title="Volume Over Time", height=300)
-                .interactive()
-            )
-
-            col1, col2 = st.columns(2)
-            col1.altair_chart(close_chart, use_container_width=True)
-            col2.altair_chart(volume_chart, use_container_width=True)
-
-            st.divider()
-            st.write("📅 **Latest Stock Data**")
-            st.dataframe(df.tail(), use_container_width=True)
-
-        else:
-            st.error(
-                f"No stock data available for {ticker} "
-                f"(Period: {time_period}, Interval tried: {interval_used}). "
-                "Try a longer period or check if the market is closed."
-            )
-    else:
-        st.error(
-            "❌ No ticker found for the entered company name.\n\n"
-            "Try:\n"
-            "- Using an exact company name (e.g., 'Tesla Inc').\n"
-            "- Entering the known ticker symbol directly (e.g., 'TSLA').\n"
-            "- Selecting a company from the dropdown list."
-        )
-else:
-    st.info("Enter a company name or select one in the sidebar to get started.")
+            df, interval_used = get
