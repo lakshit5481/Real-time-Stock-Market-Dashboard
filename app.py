@@ -62,7 +62,7 @@ def get_stock_data(symbol: str, period="1mo"):
     """Fetch historical stock data with interval mapping."""
     try:
         INTERVAL_MAP = {
-            "5d": "30m",
+            "5d": "15m",
             "1mo": "1d",
             "3mo": "1d",
             "6mo": "1d",
