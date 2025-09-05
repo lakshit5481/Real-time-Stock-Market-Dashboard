@@ -65,7 +65,7 @@ def get_stock_data(symbol: str, period="1mo"):
     - 1y: try 1wk, then 1d
     - 5y: try 1mo, then 1wk
     - max: try 3mo, then 1mo
-    Others: use 1d
+    Others default to 1d.
     """
     try:
         interval_candidates_by_period = {
@@ -132,7 +132,7 @@ with st.sidebar:
         ["5d", "1mo", "3mo", "6mo", "1y", "5y", "max"],
         index=1
     )
-    st.caption("Data cached ~120s for responsiveness. Intraday 5d uses 15m with fallbacks.")
+    st.caption("Data cached ~120s for responsiveness. 5d uses 15m with fallbacks; 1y uses 1wk→1d.")
 
 if company_name:
     with st.spinner("Searching ticker symbol..."):
@@ -144,5 +144,57 @@ if company_name:
     if ticker:
         st.subheader(f"📌 {company_name} ({ticker}) — Period: {time_period}")
 
+        # IMPORTANT: ensure full function name is called; avoid NameError
         with st.spinner("Downloading stock data..."):
-            df, interval_used = get
+            df, interval_used = get_stock_data(ticker, period=time_period)
+
+        if not df.empty:
+            st.caption(f"✅ Data fetched (interval = {interval_used})")
+
+            base = alt.Chart(df).encode(
+                x=alt.X("Date:T", title="Date")  # explicit temporal encoding
+            )
+
+            close_chart = (
+                base.mark_line(color="#1f77b4")
+                .encode(
+                    y=alt.Y("Close:Q", title="Closing Price ($)"),
+                    tooltip=[alt.Tooltip("Date:T"), alt.Tooltip("Close:Q", format=".2f")]
+                )
+                .properties(title="Closing Price Over Time", height=300)
+                .interactive()
+            )
+
+            volume_chart = (
+                base.mark_bar(color="#ff7f0e")
+                .encode(
+                    y=alt.Y("Volume:Q", title="Volume"),
+                    tooltip=[alt.Tooltip("Date:T"), alt.Tooltip("Volume:Q", format=",.0f")]
+                )
+                .properties(title="Volume Over Time", height=300)
+                .interactive()
+            )
+
+            col1, col2 = st.columns(2)
+            col1.altair_chart(close_chart, use_container_width=True)
+            col2.altair_chart(volume_chart, use_container_width=True)
+
+            st.divider()
+            st.write("📅 **Latest Stock Data**")
+            st.dataframe(df.tail(), use_container_width=True)
+        else:
+            st.error(
+                f"No stock data available for {ticker} "
+                f"(Period: {time_period}, Interval tried: {interval_used}). "
+                "Try a longer period or check if the market is closed."
+            )
+    else:
+        st.error(
+            "❌ No ticker found for the entered company name.\n\n"
+            "Try:\n"
+            "- Using an exact company name (e.g., 'Tesla Inc').\n"
+            "- Entering the known ticker symbol directly (e.g., 'TSLA').\n"
+            "- Selecting a company from the dropdown list."
+        )
+else:
+    st.info("Enter a company name or select one in the sidebar to get started.")
